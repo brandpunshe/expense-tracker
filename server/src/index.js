@@ -69,6 +69,33 @@ app.delete('/api/expenses/:id', (req, res) => {
   res.status(204).send();
 });
 
+function csvEscape(value) {
+  const str = String(value ?? '');
+  if (/[",\n]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+app.get('/api/expenses/export', (req, res) => {
+  const rows = db
+    .prepare('SELECT id, amount, category, date, note FROM expenses ORDER BY date DESC, id DESC')
+    .all();
+
+  const header = ['Дата', 'Категория', 'Сумма', 'Заметка'];
+  const lines = [header.join(',')];
+  for (const row of rows) {
+    lines.push(
+      [csvEscape(row.date), csvEscape(row.category), csvEscape(row.amount), csvEscape(row.note)].join(',')
+    );
+  }
+  const csv = '﻿' + lines.join('\r\n') + '\r\n';
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="expenses.csv"');
+  res.send(csv);
+});
+
 app.get('/api/stats', (req, res) => {
   const now = new Date();
   const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;

@@ -44,6 +44,34 @@
   color: var(--text-primary);
 }
 
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.card-header h2 {
+  margin: 0;
+}
+
+.btn-export {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--series-1);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+
+.btn-export:hover {
+  background: var(--surface-2);
+}
+
 /* Stats row */
 
 .stats-row {

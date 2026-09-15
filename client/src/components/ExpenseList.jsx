@@ -29,7 +29,12 @@ export function ExpenseList({ expenses, onDelete, deletingId }) {
 
   return (
     <div className="card">
-      <h2>Все траты</h2>
+      <div className="card-header">
+        <h2>Все траты</h2>
+        <a className="btn-export" href="/api/expenses/export" download>
+          Экспорт в CSV
+        </a>
+      </div>
       <ul className="expense-list">
         {expenses.map((expense) => (
           <li key={expense.id} className="expense-row">
