@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { db } from './db.js';
+import { pool, initDb } from './db.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -28,44 +28,42 @@ function validateExpense(body) {
   return null;
 }
 
-app.get('/api/expenses', (req, res) => {
-  const rows = db
-    .prepare('SELECT id, amount, category, date, note FROM expenses ORDER BY date DESC, id DESC')
-    .all();
+app.get('/api/expenses', async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT id, amount, category, date, note FROM expenses ORDER BY date DESC, id DESC'
+  );
   res.json(rows);
 });
 
-app.post('/api/expenses', (req, res) => {
+app.post('/api/expenses', async (req, res) => {
   const error = validateExpense(req.body || {});
   if (error) {
     return res.status(400).json({ error });
   }
 
   const { amount, category, date, note } = req.body;
-  const stmt = db.prepare(
-    'INSERT INTO expenses (amount, category, date, note) VALUES (?, ?, ?, ?)'
+  const { rows } = await pool.query(
+    `INSERT INTO expenses (amount, category, date, note)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, amount, category, date, note`,
+    [amount, category.trim(), date, note ? note.trim() : '']
   );
-  const info = stmt.run(amount, category.trim(), date, note ? note.trim() : '');
 
-  const created = db
-    .prepare('SELECT id, amount, category, date, note FROM expenses WHERE id = ?')
-    .get(info.lastInsertRowid);
-
-  res.status(201).json(created);
+  res.status(201).json(rows[0]);
 });
 
-app.delete('/api/expenses/:id', (req, res) => {
+app.delete('/api/expenses/:id', async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {
     return res.status(400).json({ error: 'invalid id' });
   }
 
-  const existing = db.prepare('SELECT id FROM expenses WHERE id = ?').get(id);
-  if (!existing) {
+  const { rows } = await pool.query('SELECT id FROM expenses WHERE id = $1', [id]);
+  if (rows.length === 0) {
     return res.status(404).json({ error: 'expense not found' });
   }
 
-  db.prepare('DELETE FROM expenses WHERE id = ?').run(id);
+  await pool.query('DELETE FROM expenses WHERE id = $1', [id]);
   res.status(204).send();
 });
 
@@ -77,10 +75,10 @@ function csvEscape(value) {
   return str;
 }
 
-app.get('/api/expenses/export', (req, res) => {
-  const rows = db
-    .prepare('SELECT id, amount, category, date, note FROM expenses ORDER BY date DESC, id DESC')
-    .all();
+app.get('/api/expenses/export', async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT id, amount, category, date, note FROM expenses ORDER BY date DESC, id DESC'
+  );
 
   const header = ['Дата', 'Категория', 'Сумма', 'Заметка'];
   const lines = [header.join(',')];
@@ -96,23 +94,24 @@ app.get('/api/expenses/export', (req, res) => {
   res.send(csv);
 });
 
-app.get('/api/stats', (req, res) => {
+app.get('/api/stats', async (req, res) => {
   const now = new Date();
   const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-  const totalRow = db
-    .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE date LIKE ?")
-    .get(`${monthPrefix}-%`);
+  const {
+    rows: [totalRow],
+  } = await pool.query('SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE date LIKE $1', [
+    `${monthPrefix}-%`,
+  ]);
 
-  const byCategory = db
-    .prepare(
-      `SELECT category, COALESCE(SUM(amount), 0) AS total
-       FROM expenses
-       WHERE date LIKE ?
-       GROUP BY category
-       ORDER BY total DESC`
-    )
-    .all(`${monthPrefix}-%`);
+  const { rows: byCategory } = await pool.query(
+    `SELECT category, COALESCE(SUM(amount), 0) AS total
+     FROM expenses
+     WHERE date LIKE $1
+     GROUP BY category
+     ORDER BY total DESC`,
+    [`${monthPrefix}-%`]
+  );
 
   res.json({
     month: monthPrefix,
@@ -121,6 +120,13 @@ app.get('/api/stats', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Expense tracker API listening on http://localhost:${PORT}`);
-});
+initDb()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Expense tracker API listening on http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('Failed to initialize database:', err);
+    process.exit(1);
+  });
