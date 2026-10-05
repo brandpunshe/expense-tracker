@@ -13,4 +13,11 @@ export default defineConfig({
       },
     },
   },
+  // Production server (Railway runs `npm start` → `vite preview`)
+  preview: {
+    host: '0.0.0.0',
+    port: Number(process.env.PORT) || 4173,
+    strictPort: true,
+    allowedHosts: true,
+  },
 })

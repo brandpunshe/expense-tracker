@@ -1,3 +1,4 @@
+import { BASE } from '../api.js';
 import { colorForCategory } from '../categories.js';
 
 const currencyFormatter = new Intl.NumberFormat('ru-RU', {
@@ -31,7 +32,7 @@ export function ExpenseList({ expenses, onDelete, deletingId }) {
     <div className="card">
       <div className="card-header">
         <h2>Все траты</h2>
-        <a className="btn-export" href="/api/expenses/export" download>
+        <a className="btn-export" href={`${BASE}/expenses/export`} download>
           Экспорт в CSV
         </a>
       </div>
